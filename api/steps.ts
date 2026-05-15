@@ -4,7 +4,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type Step = { text: string; speak: string }
 type TaskPlan = { title: string; steps: Step[]; encouragement: string }
 
-const MODEL = 'gemini-2.0-flash'
+const MODEL = 'gemini-1.5-flash'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 
 const SYSTEM_PROMPT = `あなたは学習障害・ADHD傾向の小学生を支援する専門家です。
