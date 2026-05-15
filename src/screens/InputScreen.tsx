@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { generateMockPlan, SAMPLE_INPUT } from '../lib/mockAi'
+import { SAMPLE_INPUT } from '../lib/mockAi'
+import { generatePlan } from '../lib/ai'
 import type { TaskPlan } from '../types'
 
 interface Props {
@@ -9,13 +10,14 @@ interface Props {
 export default function InputScreen({ onPlanReady }: Props) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [usedMock, setUsedMock] = useState(false)
 
   async function handleSubmit() {
     if (!input.trim() || loading) return
     setLoading(true)
-    // 少し間を置くことで「考えてる感」を出す（後でAPI呼び出しに差し替え）
-    await new Promise(r => setTimeout(r, 700))
-    const plan = generateMockPlan(input.trim())
+    setUsedMock(false)
+    const { plan, source } = await generatePlan(input.trim())
+    setUsedMock(source === 'mock')
     setLoading(false)
     onPlanReady(plan)
   }
@@ -80,6 +82,13 @@ export default function InputScreen({ onPlanReady }: Props) {
         >
           {loading ? '考えてるよ…' : '手順にする →'}
         </button>
+
+        {/* APIキー未設定時やネットワークエラー時のフォールバック通知 */}
+        {usedMock && (
+          <p className="text-xs text-center mt-2" style={{ color: '#BBB' }}>
+            ※ AI接続できなかったのでサンプル手順を表示しています
+          </p>
+        )}
       </div>
     </div>
   )
