@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { SAMPLE_INPUT } from '../lib/mockAi'
 import { generatePlan } from '../lib/ai'
+import { startListening, isVoiceSupported } from '../lib/voiceInput'
 import type { TaskPlan } from '../types'
 
 interface Props {
@@ -9,8 +10,33 @@ interface Props {
 
 export default function InputScreen({ onPlanReady }: Props) {
   const [input, setInput] = useState('')
+  const [listening, setListening] = useState(false)
   const [loading, setLoading] = useState(false)
   const [usedMock, setUsedMock] = useState(false)
+  const stopRef = useRef<(() => void) | null>(null)
+  const voiceSupported = isVoiceSupported()
+
+  // コンポーネントアンマウント時に音声認識を止める
+  useEffect(() => {
+    return () => { stopRef.current?.() }
+  }, [])
+
+  function handleMic() {
+    if (listening) {
+      stopRef.current?.()
+      return
+    }
+    setListening(true)
+    setInput('')
+    stopRef.current = startListening(
+      (text, isFinal) => {
+        setInput(text)
+        // 確定テキストが出たら自動的に止める（safariは1発で止まることが多い）
+        if (isFinal) stopRef.current?.()
+      },
+      () => setListening(false),
+    )
+  }
 
   async function handleSubmit() {
     if (!input.trim() || loading) return
@@ -22,7 +48,7 @@ export default function InputScreen({ onPlanReady }: Props) {
     onPlanReady(plan)
   }
 
-  const canSubmit = input.trim().length >= 2 && !loading
+  const canSubmit = input.trim().length >= 2 && !loading && !listening
 
   return (
     <div
@@ -30,31 +56,62 @@ export default function InputScreen({ onPlanReady }: Props) {
       style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}
     >
       {/* ヘッダー */}
-      <div className="pb-6">
+      <div className="pb-5">
         <h1 className="text-2xl font-extrabold" style={{ color: '#4CAF82' }}>
           てじゅんアプリ
         </h1>
         <p className="text-sm mt-1" style={{ color: '#999' }}>
-          やることをかいてみよう
+          やることを話すか、書いてみよう
         </p>
       </div>
 
-      {/* 入力エリア */}
+      {/* 音声入力ボタン */}
+      {voiceSupported && (
+        <div className="pb-4">
+          <button
+            onClick={handleMic}
+            disabled={loading}
+            className={`w-full py-5 rounded-2xl text-lg font-extrabold text-white transition-all active:scale-95 ${
+              listening ? 'animate-mic-pulse' : ''
+            }`}
+            style={{
+              backgroundColor: listening ? '#EF4444' : '#FF9800',
+              boxShadow: listening
+                ? 'none'
+                : '0 4px 20px rgba(255,152,0,0.35)',
+            }}
+          >
+            {listening ? '🔴 きいてるよ… (タップでやめる)' : '🎤 はなして入力'}
+          </button>
+        </div>
+      )}
+
+      {/* テキスト入力 */}
       <div className="flex-1 flex flex-col gap-3">
-        <label className="text-base font-bold" style={{ color: '#444' }}>
-          今日やることは？
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-bold" style={{ color: '#666' }}>
+            {voiceSupported ? 'または文字で入力' : '今日やることは？'}
+          </label>
+          {input.trim().length >= 2 && !listening && (
+            <span className="text-xs" style={{ color: '#AAA' }}>
+              {input.length}文字
+            </span>
+          )}
+        </div>
 
         <textarea
           value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder={'例：帰ったらランドセル置いて、\n手を洗って、宿題をやろう'}
+          onChange={e => { if (!listening) setInput(e.target.value) }}
+          placeholder={listening
+            ? '話してください…'
+            : '例：帰ったらランドセル置いて、手を洗って、宿題をやろう'}
+          readOnly={listening}
           className="rounded-2xl border-2 p-4 text-base resize-none outline-none transition-colors"
           style={{
-            borderColor: input.trim() ? '#4CAF82' : '#E0E0E0',
-            backgroundColor: 'white',
-            minHeight: '160px',
-            color: '#1A1A1A',
+            borderColor: listening ? '#EF4444' : input.trim() ? '#4CAF82' : '#E0E0E0',
+            backgroundColor: listening ? '#FFF5F5' : 'white',
+            minHeight: '120px',
+            color: listening ? '#666' : '#1A1A1A',
             lineHeight: '1.75',
             flex: '1 1 auto',
           }}
@@ -80,13 +137,12 @@ export default function InputScreen({ onPlanReady }: Props) {
             boxShadow: canSubmit ? '0 4px 20px rgba(76,175,130,0.4)' : 'none',
           }}
         >
-          {loading ? '考えてるよ…' : '手順にする →'}
+          {loading ? '考えてるよ…' : listening ? 'きいてます…' : '手順にする →'}
         </button>
 
-        {/* APIキー未設定時やネットワークエラー時のフォールバック通知 */}
         {usedMock && (
           <p className="text-xs text-center mt-2" style={{ color: '#BBB' }}>
-            ※ AI接続できなかったのでサンプル手順を表示しています
+            ※ AI接続できなかったため、サンプル手順を表示しています
           </p>
         )}
       </div>
